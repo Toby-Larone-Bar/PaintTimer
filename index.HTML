@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Paint Canvas for Kids with Persistent Timer & Password Lock</title>
+<style>
+  body {
+    font-family: sans-serif;
+    margin: 0;
+    background: #f0f0f0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+  }
+
+  #timer {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    font-size: 1.2rem;
+    background: #fff;
+    padding: 0.5rem 1rem;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    user-select: none;
+    z-index: 1000;
+    font-weight: bold;
+  }
+
+  #passwordContainer {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    display: none;
+    z-index: 1001;
+  }
+
+  #passwordContainer input {
+    padding: 0.3rem 0.5rem;
+    font-size: 1rem;
+    margin-right: 0.5rem;
+  }
+
+  #passwordContainer button {
+    padding: 0.3rem 0.7rem;
+    font-size: 1rem;
+  }
+
+  .main-container {
+    display: flex;
+    align-items: flex-start;
+    margin-top: 2.5rem;
+  }
+
+  .shape-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-right: 1rem;
+  }
+
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-top: 1rem;
+    width: 100%;
+    max-width: 650px;
+  }
+
+  .color-palette {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .color-swatch {
+    width: 30px;
+    height: 30px;
+    border: 2px solid #333;
+    cursor: pointer;
+    box-sizing: border-box;
+  }
+
+  canvas {
+    border: 2px solid #333;
+    background: white;
+    cursor: crosshair;
+  }
+
+  .right-panel {
+    margin-left: 1rem;
+    min-width: 60px;
+  }
+
+  button {
+    padding: 0.5rem 0.8rem;
+    font-size: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    cursor: pointer;
+    background: white;
+  }
+
+  button.active {
+    background-color: #d0d0d0;
+  }
+
+  #colorPicker {
+    display: block;
+    margin-top: 0.5rem;
+    width: 60px;
+  }
+</style>
+</head>
+<body>
+
+<h2>Paint Canvas</h2>
+
+<div id="timer">Time left: 05:00</div>
+
+<div id="passwordContainer">
+  <input type="password" id="passwordInput" placeholder="Enter password" aria-label="Password input" />
+  <button id="passwordSubmit">Unlock</button>
+</div>
+
+<div class="toolbar">
+  <button id="drawBtn" class="active">Draw</button>
+  <button id="eraserBtn">Eraser</button>
+  <button id="fillBtn">Fill</button>
+  <button id="clearBtn">Clear</button>
+  <button id="undoBtn">Undo</button>
+  <button id="redoBtn">Redo</button>
+  <button id="colorBtn">Colours</button>
+</div>
+
+<div class="main-container">
+  <div class="shape-buttons">
+    <button data-shape="none" class="active">Free Draw</button>
+    <button data-shape="triangle">Triangle</button>
+    <button data-shape="square">Square</button>
+    <button data-shape="circle">Circle</button>
+    <button data-shape="pentagon">Pentagon</button>
+    <button data-shape="hexagon">Hexagon</button>
+    <button data-shape="heart">Heart</button>
+    <button data-shape="diamond">Diamond</button>
+  </div>
+
+  <canvas id="canvas" width="600" height="400"></canvas>
+
+  <div class="right-panel">
+    <input type="color" id="colorPicker" aria-label="Color picker" style="display:none;" />
+  </div>
+</div>
+
+<div class="color-palette" id="colorPalette" style="display:none;">
+  <div class="color-swatch" style="background-color: #000000" data-color="#000000" title="Black"></div>
+  <div class="color-swatch" style="background-color: #ff0000" data-color="#ff0000" title="Red"></div>
+  <div class="color-swatch" style="background-color: #00ff00" data-color="#00ff00" title="Green"></div>
+  <div class="color-swatch" style="background-color: #0000ff" data-color="#0000ff" title="Blue"></div>
+  <div class="color-swatch" style="background-color: #ffff00" data-color="#ffff00" title="Yellow"></div>
+  <div class="color-swatch" style="background-color: #ff00ff" data-color="#ff00ff" title="Magenta"></div>
+  <div class="color-swatch" style="background-color: #00ffff" data-color="#00ffff" title="Cyan"></div>
+  <div class="color-swatch" style="background-color: #ffffff" data-color="#ffffff" title="White"></div>
+</div>
+
+<script>
+  const PASSWORD = "PaintPass"; // Change password here
+  const TIMER_KEY = "paint_timer_end";
+
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const timerDisplay = document.getElementById('timer');
+  const passwordContainer = document.getElementById('passwordContainer');
+  const passwordInput = document.getElementById('passwordInput');
+  const passwordSubmit = document.getElementById('passwordSubmit');
+
+  const drawBtn = document.getElementById('drawBtn');
+  const eraserBtn = document.getElementById('eraserBtn');
+  const fillBtn = document.getElementById('fillBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const undoBtn = document.getElementById('undoBtn');
+  const redoBtn = document.getElementById('redoBtn');
+  const colorBtn = document.getElementById('colorBtn');
+  const colorPicker = document.getElementById('colorPicker');
+  const colorPalette = document.getElementById('colorPalette');
+  const shapeButtons = document.querySelectorAll('.shape-buttons button');
+
+  let isDrawing = false;
+  let currentColor = '#000000';
+  let currentTool = 'draw'; // draw, eraser, fill
+  let currentShape = 'none';
+  let drawingEnabled = true;
+  let undoStack = [];
+  let redoStack = [];
+  let startX = 0, startY = 0;
+
+  // --- Timer Initialization ---
+  // Load or create timer end timestamp (5 mins from now if none)
+  let timerEnd = localStorage.getItem(TIMER_KEY);
+  if (!timerEnd) {
+    timerEnd = Date.now() + 5 * 60 * 1000;
+    localStorage.setItem(TIMER_KEY, timerEnd);
+  } else {
+    timerEnd = parseInt(timerEnd, 10);
+  }
+
+  function updateTimer() {
+    const now = Date.now();
+    const diff = timerEnd - now;
+
+    if (diff <= 0) {
+      timerDisplay.textContent = "Time left: 00:00";
+      onTimerEnd();
+    } else {
+      const minutes = Math.floor(diff / 60000);
+      const seconds = Math.floor((diff % 60000) / 1000);
+      timerDisplay.textContent = `Time left: ${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+    }
+  }
+
+  function onTimerEnd() {
+    if (!drawingEnabled) return;
+    drawingEnabled = false;
+    disableAllControls();
+    passwordContainer.style.display = "block";
+    colorPicker.style.display = 'none';
+    colorPalette.style.display = 'none';
+  }
+
+  function disableAllControls() {
+    // Disable buttons and shape selectors
+    [drawBtn, eraserBtn, fillBtn, clearBtn, undoBtn, redoBtn, colorBtn].forEach(b => b.disabled = true);
+    shapeButtons.forEach(b => b.disabled = true);
+
+    // Disable canvas interactions
+    canvas.style.cursor = 'default';
+  }
+
+  function enableAllControls() {
+    [drawBtn, eraserBtn, fillBtn, clearBtn, undoBtn, redoBtn, colorBtn].forEach(b => b.disabled = false);
+    shapeButtons.forEach(b => b.disabled = false);
+
+    canvas.style.cursor = 'crosshair';
+  }
+
+  // --- Drawing Functions ---
+  function saveState(stack) {
+    if (!drawingEnabled) return;
+    stack.push(canvas.toDataURL());
+    if (stack.length > 20) stack.shift();
+  }
+
+  function restoreFromDataURL(dataURL) {
+    const img = new Image();
+    img.src = dataURL;
+    img.onload = () => ctx.drawImage(img, 0, 0);
+  }
+
+  function clearCanvas() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  function fillCanvas() {
+    if (!drawingEnabled) return;
+    ctx.fillStyle = currentColor;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  function polygon(x, y, radius, sides) {
+    if (sides < 3) return;
+    const angle = (2 * Math.PI) / sides;
+    const rotationOffset = -Math.PI / 2 + (sides % 2 === 0 ? angle / 2 : 0);
+    ctx.moveTo(x + radius * Math.cos(rotationOffset), y + radius * Math.sin(rotationOffset));
+    for (let i = 1; i <= sides; i++) {
+      ctx.lineTo(x + radius * Math.cos(i * angle + rotationOffset), y + radius * Math.sin(i * angle + rotationOffset));
+    }
+  }
+
+  function heartShape(x, y, size) {
+    const scale = size / 100;
+    ctx.moveTo(x, y + 30 * scale);
+    ctx.bezierCurveTo(x, y, x - 50 * scale, y, x - 50 * scale, y + 30 * scale);
+    ctx.bezierCurveTo(x - 50 * scale, y + 60 * scale, x, y + 90 * scale, x, y + 110 * scale);
+    ctx.bezierCurveTo(x, y + 90 * scale, x + 50 * scale, y + 60 * scale, x + 50 * scale, y + 30 * scale);
+    ctx.bezierCurveTo(x + 50 * scale, y, x, y, x, y + 30 * scale);
+    ctx.closePath();
+  }
+
+  function diamondShape(x, y, size) {
+    ctx.moveTo(x, y - size);
+    ctx.lineTo(x - size, y);
+    ctx.lineTo(x, y + size);
+    ctx.lineTo(x + size, y);
+    ctx.closePath();
+  }
+
+  function drawShape(x, y) {
+    if (!drawingEnabled) return;
+    const size = 60;
+    ctx.fillStyle = currentColor;
+    ctx.strokeStyle = currentColor;
+    ctx.lineWidth = 2;
+
+    ctx.beginPath();
+    switch (currentShape) {
+      case 'triangle':
+        ctx.moveTo(x, y - size / Math.sqrt(3));
+        ctx.lineTo(x - size / 2, y + size / (2 * Math.sqrt(3)));
+        ctx.lineTo(x + size / 2, y + size / (2 * Math.sqrt(3)));
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        break;
+      case 'square':
+        ctx.fillRect(x - size / 2, y - size / 2, size, size);
+        ctx.strokeRect(x - size / 2, y - size / 2, size, size);
+        break;
+      case 'circle':
+        ctx.arc(x, y, size / 2, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.stroke();
+        break;
+      case 'pentagon':
+        polygon(x, y, size / 2, 5);
+        ctx.fill();
+        ctx.stroke();
+        break;
+      case 'hexagon':
+        polygon(x, y, size / 2, 6);
+        ctx.fill();
+        ctx.stroke();
+        break;
+      case 'heart':
+        heartShape(x, y - size / 3, size);
+        ctx.fill();
+        ctx.stroke();
+        break;
+      case 'diamond':
+        diamondShape(x, y, size / 2);
+        ctx.fill();
+        ctx.stroke();
+        break;
+      default:
+        break;
+    }
+  }
+
+  // --- Event Handlers ---
+  function handleMouseDown(e) {
+    if (!drawingEnabled) return;
+    if (currentTool === 'fill') {
+      saveState(undoStack);
+      redoStack = [];
+      fillCanvas();
+      return;
+    }
+
+    isDrawing = true;
+    startX = e.offsetX;
+    startY = e.offsetY;
+
+    if (currentShape !== 'none') {
+      saveState(undoStack);
+      redoStack = [];
+      drawShape(startX, startY);
+      isDrawing = false;
+    } else {
+      saveState(undoStack);
+      redoStack = [];
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+    }
+  }
+
+  function handleMouseMove(e) {
+    if (!isDrawing) return;
+    if (currentShape !== 'none') return;
+
+    ctx.strokeStyle = currentTool === 'eraser' ? '#ffffff' : currentColor;
+    ctx.lineWidth = currentTool === 'eraser' ? 20 : 2;
+    ctx.lineCap = 'round';
+
+    ctx.lineTo(e.offsetX, e.offsetY);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(e.offsetX, e.offsetY);
+  }
+
+  function handleMouseUp(e) {
+    if (!drawingEnabled) return;
+    isDrawing = false;
+    ctx.beginPath();
+  }
+
+  // --- Button Click Handlers ---
+  drawBtn.onclick = () => {
+    if (!drawingEnabled) return;
+    currentTool = 'draw';
+    drawBtn.classList.add('active');
+    eraserBtn.classList.remove('active');
+  };
+
+  eraserBtn.onclick = () => {
+    if (!drawingEnabled) return;
+    currentTool = 'eraser';
+    eraserBtn.classList.add('active');
+    drawBtn.classList.remove('active');
+  };
+
+  fillBtn.onclick = () => {
+    if (!drawingEnabled) return;
+    currentTool = 'fill';
+  };
+
+  clearBtn.onclick = () => {
+    if (!drawingEnabled) return;
+    saveState(undoStack);
+    redoStack = [];
+    clearCanvas();
+  };
+
+  undoBtn.onclick = () => {
+    if (!drawingEnabled) return;
+    if (undoStack.length) {
+      redoStack.push(canvas.toDataURL());
+      const lastState = undoStack.pop();
+      const img = new Image();
+      img.src = lastState;
+      img.onload = () => {
+        clearCanvas();
+        ctx.drawImage(img, 0, 0);
+      };
+    }
+  };
+
+  redoBtn.onclick = () => {
+    if (!drawingEnabled) return;
+    if (redoStack.length) {
+      undoStack.push(canvas.toDataURL());
+      const lastState = redoStack.pop();
+      const img = new Image();
+      img.src = lastState;
+      img.onload = () => {
+        clearCanvas();
+        ctx.drawImage(img, 0, 0);
+      };
+    }
+  };
+
+  colorBtn.onclick = () => {
+    if (!drawingEnabled) return;
+    if (colorPalette.style.display === 'none') {
+      colorPalette.style.display = 'flex';
+      colorPicker.style.display = 'block';
+    } else {
+      colorPalette.style.display = 'none';
+      colorPicker.style.display = 'none';
+    }
+  };
+
+  colorPicker.oninput = (e) => {
+    if (!drawingEnabled) return;
+    currentColor = e.target.value;
+  };
+
+  colorPalette.querySelectorAll('.color-swatch').forEach(swatch => {
+    swatch.onclick = () => {
+      if (!drawingEnabled) return;
+      currentColor = swatch.getAttribute('data-color');
+      colorPicker.value = currentColor;
+    };
+  });
+
+  shapeButtons.forEach(btn => {
+    btn.onclick = () => {
+      if (!drawingEnabled) return;
+      shapeButtons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentShape = btn.getAttribute('data-shape');
+    };
+  });
+
+  // --- Canvas Events ---
+  canvas.addEventListener('mousedown', handleMouseDown);
+  canvas.addEventListener('mousemove', handleMouseMove);
+  canvas.addEventListener('mouseup', handleMouseUp);
+  canvas.addEventListener('mouseleave', () => { isDrawing = false; ctx.beginPath(); });
+
+  // --- Password Unlock ---
+  passwordSubmit.onclick = () => {
+    if (passwordInput.value === PASSWORD) {
+      drawingEnabled = true;
+      passwordInput.value = '';
+      passwordContainer.style.display = 'none';
+      enableAllControls();
+      timerEnd = Date.now() + 5 * 60 * 1000;
+      localStorage.setItem(TIMER_KEY, timerEnd);
+      updateTimer();
+    } else {
+      alert("Incorrect password!");
+      passwordInput.value = '';
+      passwordInput.focus();
+    }
+  };
+
+  passwordInput.addEventListener("keyup", e => {
+    if (e.key === "Enter") passwordSubmit.click();
+  });
+
+  // --- Timer Interval ---
+  updateTimer();
+  const timerInterval = setInterval(() => {
+    updateTimer();
+  }, 1000);
+
+</script>
+
+</body>
+</html>
